@@ -1,4 +1,4 @@
-// pages/api/saveprofile.js
+// app/api/saveprofile/route.js
 import { createClient } from "@supabase/supabase-js";
 
 // Initialize Supabase client with service role key (server-side only)
@@ -7,41 +7,31 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-export default async function handler(req, res) {
-  // Handle preflight CORS requests
-  if (req.method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-    return res.status(200).end();
-  }
-
-  // Only allow POST
-  if (req.method !== "POST") {
-    return res.status(405).json({ success: false, error: "Method not allowed" });
-  }
-
-  // Parse body
-  const { email, firstName, lastName, phone, birthDate, gender } = req.body;
-
-  if (!email || !firstName || !lastName) {
-    return res.status(400).json({
-      success: false,
-      error: "Email, first name, and last name are required",
-    });
-  }
-
-  // Convert birthDate "JJ/MM/AAAA" -> "YYYY-MM-DD"
-  let formattedBirthDate = null;
-  if (birthDate) {
-    const parts = birthDate.split("/");
-    if (parts.length === 3) {
-      formattedBirthDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
-    }
-  }
-
+// POST method
+export async function POST(req) {
   try {
-    // Upsert profile
+    const body = await req.json();
+    const { email, firstName, lastName, phone, birthDate, gender } = body;
+
+    if (!email || !firstName || !lastName) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Email, first name, and last name are required",
+        }),
+        { status: 400 }
+      );
+    }
+
+    // Convert birthDate "JJ/MM/AAAA" -> "YYYY-MM-DD"
+    let formattedBirthDate = null;
+    if (birthDate) {
+      const parts = birthDate.split("/");
+      if (parts.length === 3) {
+        formattedBirthDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+    }
+
     const { data, error } = await supabase.from("profiles").upsert(
       [
         {
@@ -58,12 +48,24 @@ export default async function handler(req, res) {
 
     if (error) {
       console.error("Supabase upsert error:", error);
-      return res.status(400).json({ success: false, error: error.message });
+      return new Response(JSON.stringify({ success: false, error: error.message }), { status: 400 });
     }
 
-    return res.status(200).json({ success: true, data });
+    return new Response(JSON.stringify({ success: true, data }), { status: 200 });
   } catch (err) {
     console.error("Server error:", err);
-    return res.status(500).json({ success: false, error: "Internal server error" });
+    return new Response(JSON.stringify({ success: false, error: "Internal server error" }), { status: 500 });
   }
+}
+
+// OPTIONS method for CORS
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    },
+  });
 }
