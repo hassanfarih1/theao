@@ -32,6 +32,7 @@ export async function POST(req) {
       }
     }
 
+    // Upsert profile and set hasOnboarded to true
     const { data, error } = await supabase.from("profiles").upsert(
       [
         {
@@ -41,6 +42,7 @@ export async function POST(req) {
           phone,
           birth_date: formattedBirthDate,
           gender,
+          hasOnboarded: true, // <-- new column updated here
         },
       ],
       { onConflict: "email" }
@@ -48,13 +50,19 @@ export async function POST(req) {
 
     if (error) {
       console.error("Supabase upsert error:", error);
-      return new Response(JSON.stringify({ success: false, error: error.message }), { status: 400 });
+      return new Response(
+        JSON.stringify({ success: false, error: error.message }),
+        { status: 400 }
+      );
     }
 
     return new Response(JSON.stringify({ success: true, data }), { status: 200 });
   } catch (err) {
     console.error("Server error:", err);
-    return new Response(JSON.stringify({ success: false, error: "Internal server error" }), { status: 500 });
+    return new Response(
+      JSON.stringify({ success: false, error: "Internal server error" }),
+      { status: 500 }
+    );
   }
 }
 
