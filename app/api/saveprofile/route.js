@@ -42,7 +42,7 @@ export async function POST(req) {
           phone,
           birth_date: formattedBirthDate,
           gender,
-          hasOnboarded: true, // <-- new column updated here
+          hasonboarded: true, // <-- new column updated here
         },
       ],
       { onConflict: "email" }
