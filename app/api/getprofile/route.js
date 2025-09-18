@@ -30,11 +30,29 @@ export async function POST(req) {
       );
     }
 
-    return new Response(JSON.stringify({ success: true, data }), { status: 200 });
-  } catch (err) {
-    return new Response(JSON.stringify({ success: false, error: "Internal server error" }), {
-      status: 500,
+    // Generate public URL for the image if it exists
+    let pictureUrl = null;
+    if (data.pictures) {
+      const { data: urlData } = supabase
+        .storage
+        .from("profile-images") // <-- your storage bucket name
+        .getPublicUrl(data.pictures); // <-- the filename/path in Supabase
+      pictureUrl = urlData.publicUrl;
+    }
+
+    const responseData = {
+      ...data,
+      pictures: pictureUrl, // replace with public URL
+    };
+
+    return new Response(JSON.stringify({ success: true, data: responseData }), {
+      status: 200,
     });
+  } catch (err) {
+    return new Response(
+      JSON.stringify({ success: false, error: "Internal server error" }),
+      { status: 500 }
+    );
   }
 }
 
