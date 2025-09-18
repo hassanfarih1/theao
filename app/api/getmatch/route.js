@@ -16,6 +16,8 @@ export async function GET() {
         id,
         nom,           
         longitude,
+        latitude,
+        localisation,
         places,
         prix,
         date_match,
