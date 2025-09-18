@@ -26,7 +26,8 @@ export async function GET() {
         created_at,
         player_id,
         profiles (
-          pictures
+          pictures,
+          email
         )
       `
       )
