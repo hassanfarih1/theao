@@ -21,8 +21,9 @@ async function getUniqueFileName(bucket, originalName) {
 
   let counter = 1;
   while (true) {
-    const { data } = supabase.storage.from(bucket).list("", { search: name });
-    if (!data || data.length === 0) break; // name available
+    const { data, error } = await supabase.storage.from(bucket).list("", { search: name });
+    if (error) break; // stop if error
+    if (!data || data.length === 0) break; // available name
     name = `${base}${counter}${ext}`;
     counter++;
   }
@@ -48,7 +49,7 @@ export async function POST(req) {
           success: false,
           error: "Email, first name, and last name are required",
         }),
-        { status: 400 }
+        { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
@@ -56,11 +57,17 @@ export async function POST(req) {
 
     // Direct upload to Supabase Storage
     if (picture && picture.size > 0) {
+      const arrayBuffer = await picture.arrayBuffer(); // convert to buffer
+      const buffer = Buffer.from(arrayBuffer);
+
       const uniqueName = await getUniqueFileName("pictures", picture.name);
 
       const { error: uploadError } = await supabase.storage
         .from("pictures")
-        .upload(uniqueName, picture, { upsert: false }); // no overwrite
+        .upload(uniqueName, buffer, {
+          contentType: picture.type || "image/png",
+          upsert: false, // prevent overwrite
+        });
 
       if (uploadError) {
         console.error("Supabase upload error:", uploadError);
@@ -96,13 +103,22 @@ export async function POST(req) {
     );
 
     if (error) {
-      return new Response(JSON.stringify({ success: false, error: error.message }), { status: 400 });
+      return new Response(JSON.stringify({ success: false, error: error.message }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
-    return new Response(JSON.stringify({ success: true, data }), { status: 200 });
+    return new Response(JSON.stringify({ success: true, data, pictureName }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   } catch (err) {
     console.error("Server error:", err);
-    return new Response(JSON.stringify({ success: false, error: "Internal server error" }), { status: 500 });
+    return new Response(JSON.stringify({ success: false, error: "Internal server error" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
 
