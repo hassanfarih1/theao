@@ -55,9 +55,9 @@ export async function POST(req) {
 
     let pictureName = null;
 
-    // Direct upload to Supabase Storage
+    // Upload new image only if provided
     if (picture && picture.size > 0) {
-      const arrayBuffer = await picture.arrayBuffer(); // convert to buffer
+      const arrayBuffer = await picture.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
       const uniqueName = await getUniqueFileName("pictures", picture.name);
@@ -66,14 +66,18 @@ export async function POST(req) {
         .from("pictures")
         .upload(uniqueName, buffer, {
           contentType: picture.type || "image/png",
-          upsert: false, // prevent overwrite
+          upsert: false,
         });
 
       if (uploadError) {
         console.error("Supabase upload error:", uploadError);
-      } else {
-        pictureName = uniqueName; // save file name in DB
+        return new Response(
+          JSON.stringify({ success: false, error: "Impossible de téléverser l'image" }),
+          { status: 500, headers: { "Content-Type": "application/json" } }
+        );
       }
+
+      pictureName = uniqueName;
     }
 
     // Convert birthDate "JJ/MM/AAAA" -> "YYYY-MM-DD"
@@ -85,20 +89,25 @@ export async function POST(req) {
       }
     }
 
+    // Build upsert object
+    const updateData = {
+      email,
+      first_name: firstName,
+      last_name: lastName,
+      phone,
+      birth_date: formattedBirthDate,
+      gender,
+      hasonboarded: true,
+    };
+
+    // Only add picture if a new one was uploaded
+    if (pictureName) {
+      updateData.pictures = pictureName;
+    }
+
     // Upsert profile
     const { data, error } = await supabase.from("profiles").upsert(
-      [
-        {
-          email,
-          first_name: firstName,
-          last_name: lastName,
-          phone,
-          birth_date: formattedBirthDate,
-          gender,
-          pictures: pictureName,
-          hasonboarded: true,
-        },
-      ],
+      [updateData],
       { onConflict: "email" }
     );
 
