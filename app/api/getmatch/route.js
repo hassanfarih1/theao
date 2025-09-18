@@ -23,11 +23,16 @@ export async function GET() {
         date_match,
         heure_debut,
         heure_fin,
+        description,
         created_at,
+        communication_link,
         player_id,
         profiles (
           pictures,
-          email
+          email,
+          phone,
+          first_name,
+          last_name
         )
       `
       )
