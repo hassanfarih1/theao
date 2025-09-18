@@ -1,6 +1,5 @@
 // app/api/saveprofile/route.js
 import { createClient } from "@supabase/supabase-js";
-import { v4 as uuidv4 } from "uuid";
 
 // Initialize Supabase client with service role key (server-side only)
 const supabase = createClient(
@@ -8,11 +7,40 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// POST method
+// Helper to get a unique filename
+async function getUniqueFileName(bucket, originalName) {
+  let name = originalName;
+  let ext = "";
+  let base = originalName;
+
+  const dotIndex = originalName.lastIndexOf(".");
+  if (dotIndex !== -1) {
+    ext = originalName.substring(dotIndex); // ".png"
+    base = originalName.substring(0, dotIndex); // "foto"
+  }
+
+  let counter = 1;
+  while (true) {
+    const { data } = supabase.storage.from(bucket).list("", { search: name });
+    if (!data || data.length === 0) break; // name available
+    name = `${base}${counter}${ext}`;
+    counter++;
+  }
+
+  return name;
+}
+
 export async function POST(req) {
   try {
-    const body = await req.json();
-    const { email, firstName, lastName, phone, birthDate, gender, pictures } = body;
+    const formData = await req.formData();
+
+    const email = formData.get("email");
+    const firstName = formData.get("firstName");
+    const lastName = formData.get("lastName");
+    const phone = formData.get("phone");
+    const birthDate = formData.get("birthDate");
+    const gender = formData.get("gender");
+    const picture = formData.get("picture"); // File
 
     if (!email || !firstName || !lastName) {
       return new Response(
@@ -24,23 +52,20 @@ export async function POST(req) {
       );
     }
 
-    let pictureUrl = null;
+    let pictureName = null;
 
-    // Upload picture if it exists
-    if (pictures) {
-      // pictures is expected to be a base64 string starting with "data:image/..."
-      const base64Data = pictures.split(",")[1];
-      const buffer = Buffer.from(base64Data, "base64");
-      const fileName = `${uuidv4()}.png`;
+    // Direct upload to Supabase Storage
+    if (picture && picture.size > 0) {
+      const uniqueName = await getUniqueFileName("pictures", picture.name);
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from("pictures")
-        .upload(fileName, buffer, { contentType: "image/png" });
+        .upload(uniqueName, picture, { upsert: false }); // no overwrite
 
       if (uploadError) {
         console.error("Supabase upload error:", uploadError);
       } else {
-        pictureUrl = supabase.storage.from("pictures").getPublicUrl(fileName).data.publicUrl;
+        pictureName = uniqueName; // save file name in DB
       }
     }
 
@@ -53,7 +78,7 @@ export async function POST(req) {
       }
     }
 
-    // Upsert profile and set hasOnboarded to true
+    // Upsert profile
     const { data, error } = await supabase.from("profiles").upsert(
       [
         {
@@ -63,7 +88,7 @@ export async function POST(req) {
           phone,
           birth_date: formattedBirthDate,
           gender,
-          pictures: pictureUrl,
+          pictures: pictureName,
           hasonboarded: true,
         },
       ],
@@ -71,7 +96,6 @@ export async function POST(req) {
     );
 
     if (error) {
-      console.error("Supabase upsert error:", error);
       return new Response(JSON.stringify({ success: false, error: error.message }), { status: 400 });
     }
 
