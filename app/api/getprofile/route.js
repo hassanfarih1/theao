@@ -35,7 +35,7 @@ export async function POST(req) {
     if (data.pictures) {
       const { data: urlData } = supabase
         .storage
-        .from("profile-images") // <-- your storage bucket name
+        .from("pictures") // <-- your storage bucket name
         .getPublicUrl(data.pictures); // <-- the filename/path in Supabase
       pictureUrl = urlData.publicUrl;
     }
