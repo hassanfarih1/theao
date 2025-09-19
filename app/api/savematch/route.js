@@ -25,23 +25,19 @@ export async function POST(req) {
       heureFin            // expected format "HH:MM"
     } = body;
 
+    // Validate required fields
     if (!email || !nom || !places || !dateMatch || !heureDebut || !heureFin) {
       return new Response(
-        JSON.stringify({
-          success: false,
-          error: "Missing required fields",
-        }),
+        JSON.stringify({ success: false, error: "Missing required fields" }),
         { status: 400 }
       );
     }
 
     // Convert date "DD/MM/YYYY" -> "YYYY-MM-DD"
     let formattedDate = null;
-    if (dateMatch) {
-      const parts = dateMatch.split("/");
-      if (parts.length === 3) {
-        formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
-      }
+    const parts = dateMatch.split("/");
+    if (parts.length === 3) {
+      formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
     }
 
     // Find player_id from profiles by email
@@ -58,33 +54,59 @@ export async function POST(req) {
       );
     }
 
-    // Insert into matches
-    const { data, error } = await supabase.from("matches").insert([
-      {
-        nom,
-        description,
-        communication_link: communicationLink,
-        localisation,
-        latitude,
-        longitude,
-        places,
-        prix,
-        date_match: formattedDate,
-        heure_debut: heureDebut,
-        heure_fin: heureFin,
-        player_id: profile.id,
-      },
-    ]);
+    // Insert into matches and return the inserted row
+    const { data: matchData, error: matchError } = await supabase
+      .from("matches")
+      .insert([
+        {
+          nom,
+          description,
+          communication_link: communicationLink,
+          localisation,
+          latitude,
+          longitude,
+          places,
+          prix,
+          date_match: formattedDate,
+          heure_debut: heureDebut,
+          heure_fin: heureFin,
+          player_id: profile.id, // creator of the match
+        },
+      ])
+      .select() // needed to return the inserted row
+      .single();
 
-    if (error) {
-      console.error("Supabase insert error:", error);
+    if (matchError) {
+      console.error("Supabase insert match error:", matchError);
       return new Response(
-        JSON.stringify({ success: false, error: error.message }),
+        JSON.stringify({ success: false, error: matchError.message }),
         { status: 400 }
       );
     }
 
-    return new Response(JSON.stringify({ success: true, data }), { status: 200 });
+    // Automatically add creator to match_players table
+    const { data: joinData, error: joinError } = await supabase
+      .from("joueur_de_match")
+      .insert([
+        {
+          match_id: matchData.id,  // newly created match ID
+          player_id: profile.id,   // creator's profile ID
+        },
+      ]);
+
+    if (joinError) {
+      console.error("Supabase insert join error:", joinError);
+      return new Response(
+        JSON.stringify({ success: false, error: joinError.message }),
+        { status: 400 }
+      );
+    }
+
+    // Return success
+    return new Response(
+      JSON.stringify({ success: true, match: matchData, joined: joinData }),
+      { status: 200 }
+    );
   } catch (err) {
     console.error("Server error:", err);
     return new Response(
