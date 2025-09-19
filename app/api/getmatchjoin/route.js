@@ -17,38 +17,36 @@ export async function POST(req) {
       );
     }
 
-    // Trouver le player_id via email
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("email", email)
-      .single();
-
-    if (profileError || !profile) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Profil introuvable" }),
-        { status: 404 }
-      );
-    }
-
-    // Vérifier si le joueur a déjà rejoint
-    const { data: joinData, error: joinError } = await supabase
+    // Récupérer tous les joueurs du match avec leurs profils
+    const { data: players, error: playersError } = await supabase
       .from("joueur_de_match")
-      .select("*")
-      .eq("match_id", matchId)
-      .eq("player_id", profile.id)
-      .single();
+      .select(`
+        player_id,
+        profiles (
+          id,
+          email,
+          first_name,
+          last_name,
+          phone,
+          picture
+        )
+      `)
+      .eq("match_id", matchId);
 
-    if (joinError && joinError.code !== "PGRST116") {
+    if (playersError) {
       return new Response(
-        JSON.stringify({ success: false, error: joinError.message }),
+        JSON.stringify({ success: false, error: playersError.message }),
         { status: 400 }
       );
     }
 
-    const joined = !!joinData;
+    // Vérifier si l'utilisateur a déjà rejoint
+    const joined = players.some(p => p.profiles?.email === email);
 
-    return new Response(JSON.stringify({ success: true, joined }), { status: 200 });
+    return new Response(
+      JSON.stringify({ success: true, joined, players }),
+      { status: 200 }
+    );
   } catch (err) {
     console.error("Server error:", err);
     return new Response(
