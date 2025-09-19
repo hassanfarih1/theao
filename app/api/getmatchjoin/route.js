@@ -49,14 +49,14 @@ export async function POST(req) {
     const joined = !!joinData;
 
     // Récupérer tous les joueurs de ce match avec leurs profils
-    const { data: players, error: playersError } = await supabase
+    const { data: playersData, error: playersError } = await supabase
       .from("joueur_de_match")
       .select(`
         profiles (
           first_name,
           last_name,
           phone,
-          picture
+          pictures
         )
       `)
       .eq("match_id", matchId);
@@ -64,6 +64,23 @@ export async function POST(req) {
     if (playersError) {
       console.error("Error fetching players:", playersError);
     }
+
+    // Générer l'URL publique pour chaque image
+    const players = (playersData || []).map((p) => {
+      let pictureUrl = null;
+      if (p.profiles?.pictures) {
+        const { data: urlData } = supabase.storage
+          .from("pictures")
+          .getPublicUrl(p.profiles.pictures);
+        pictureUrl = urlData?.publicUrl || null;
+      }
+      return {
+        first_name: p.profiles?.first_name || null,
+        last_name: p.profiles?.last_name || null,
+        phone: p.profiles?.phone || null,
+        picture: pictureUrl,
+      };
+    });
 
     return new Response(
       JSON.stringify({ success: true, joined, players }),
