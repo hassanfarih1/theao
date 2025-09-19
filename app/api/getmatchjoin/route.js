@@ -48,7 +48,27 @@ export async function POST(req) {
 
     const joined = !!joinData;
 
-    return new Response(JSON.stringify({ success: true, joined }), { status: 200 });
+    // Récupérer tous les joueurs de ce match avec leurs profils
+    const { data: players, error: playersError } = await supabase
+      .from("joueur_de_match")
+      .select(`
+        profiles (
+          first_name,
+          last_name,
+          phone,
+          picture
+        )
+      `)
+      .eq("match_id", matchId);
+
+    if (playersError) {
+      console.error("Error fetching players:", playersError);
+    }
+
+    return new Response(
+      JSON.stringify({ success: true, joined, players }),
+      { status: 200 }
+    );
   } catch (err) {
     console.error("Server error:", err);
     return new Response(
