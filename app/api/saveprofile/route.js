@@ -15,15 +15,15 @@ async function getUniqueFileName(bucket, originalName) {
 
   const dotIndex = originalName.lastIndexOf(".");
   if (dotIndex !== -1) {
-    ext = originalName.substring(dotIndex); // ".png"
-    base = originalName.substring(0, dotIndex); // "foto"
+    ext = originalName.substring(dotIndex);
+    base = originalName.substring(0, dotIndex);
   }
 
   let counter = 1;
   while (true) {
     const { data, error } = await supabase.storage.from(bucket).list("", { search: name });
-    if (error) break; // stop if error
-    if (!data || data.length === 0) break; // available name
+    if (error) break;
+    if (!data || data.length === 0) break;
     name = `${base}${counter}${ext}`;
     counter++;
   }
@@ -33,33 +33,43 @@ async function getUniqueFileName(bucket, originalName) {
 
 export async function POST(req) {
   try {
-    const formData = await req.formData();
+    const contentType = req.headers.get("content-type") || "";
 
-    const email = formData.get("email");
-    const firstName = formData.get("firstName");
-    const lastName = formData.get("lastName");
-    const phone = formData.get("phone");
-    const birthDate = formData.get("birthDate");
-    const gender = formData.get("gender");
-    const picture = formData.get("picture"); // File
+    let email, firstName, lastName, phone, birthDate, gender, picture;
+
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+      email = formData.get("email");
+      firstName = formData.get("firstName");
+      lastName = formData.get("lastName");
+      phone = formData.get("phone");
+      birthDate = formData.get("birthDate");
+      gender = formData.get("gender");
+      picture = formData.get("picture"); // may be null
+    } else {
+      const body = await req.json();
+      email = body.email;
+      firstName = body.firstName;
+      lastName = body.lastName;
+      phone = body.phone;
+      birthDate = body.birthDate;
+      gender = body.gender;
+      picture = null; // no picture sent in JSON
+    }
 
     if (!email || !firstName || !lastName) {
       return new Response(
-        JSON.stringify({
-          success: false,
-          error: "Email, first name, and last name are required",
-        }),
+        JSON.stringify({ success: false, error: "Email, first name, and last name are required" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
     let pictureName = null;
 
-    // Upload new image only if provided
+    // Upload picture if provided
     if (picture && picture.size > 0) {
       const arrayBuffer = await picture.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-
       const uniqueName = await getUniqueFileName("pictures", picture.name);
 
       const { error: uploadError } = await supabase.storage
@@ -84,12 +94,9 @@ export async function POST(req) {
     let formattedBirthDate = null;
     if (birthDate) {
       const parts = birthDate.split("/");
-      if (parts.length === 3) {
-        formattedBirthDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
-      }
+      if (parts.length === 3) formattedBirthDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
     }
 
-    // Build upsert object
     const updateData = {
       email,
       first_name: firstName,
@@ -100,16 +107,11 @@ export async function POST(req) {
       hasonboarded: true,
     };
 
-    // Only add picture if a new one was uploaded
-    if (pictureName) {
-      updateData.pictures = pictureName;
-    }
+    // Only update picture if a new one was uploaded
+    if (pictureName) updateData.pictures = pictureName;
 
     // Upsert profile
-    const { data, error } = await supabase.from("profiles").upsert(
-      [updateData],
-      { onConflict: "email" }
-    );
+    const { data, error } = await supabase.from("profiles").upsert([updateData], { onConflict: "email" });
 
     if (error) {
       return new Response(JSON.stringify({ success: false, error: error.message }), {
