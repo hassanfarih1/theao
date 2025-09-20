@@ -33,7 +33,8 @@ export async function GET() {
           phone,
           first_name,
           last_name
-        )
+        ),
+        joueur_de_match (player_id)
       `
       )
       .order("created_at", { ascending: false });
